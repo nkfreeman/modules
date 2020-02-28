@@ -79,82 +79,91 @@ def generate_multimodal_data(centers = 3, mean_LB = 500, mean_UB = 1000,
     
     return data
 
-def remove_outliers(data, include_plot = False, remove_mild_outliers = False):
+def handle_outliers(data, outlier_threshold = 3.0, assume_symmetric = False, return_bool_array = False):
     '''
     This function removes outliers from a dataset that is structured
-    as a 1-dimensional array or list. The function always removes extreme
-    outliers, i.e., data values x that satisfy 'x < q25 - 3*IQR' or 
-    'x > q75 + 3*IQR', where q25 denotes the 25th percentile value, q75 
-    denotes the 75th percentile value, and IQR denotes the inter-quartile
-    range (q75 - q25). In addition, setting the optional remove_mild_outliers
-    argument to True allows users to also remove mild outliers, i.e., data 
-    values x that satisfy 'x < q25 - 1.5*IQR' or 'x > q75 + 1.5*IQR'.
+    as a 1-dimensional numpy array, pandas seriers, or list. In contrast
+    to using traditional boxplots, the defualt for this function is based on 
+    the outlier detection method described in Walker et al. (2018). A citation for
+    the paper follows. In contrast to more traditional methods, this approach
+    does not assume that the data is symmetric. If a user wants to force the
+    assumption of symmetry, they may do so using the optional assume_symmetric
+    argument. By default, the function returns a list that conatins the data
+    with outliers removed. If the user wants to inspect the data points flagged
+    as outliers, the return_bool_array argument may be specified to return a list
+    of boolean values with True indicating that a point is NOT an outlier and
+    False indicating that a point IS an outlier.
+    
+    The citation for the boxplot method employed for non-symmetric data is:
+    Walker, M. L., Dovoedo, Y. H., Chakraborti, S., & Hilton, C. W. (2018). 
+    An improved boxplot for univariate data. 
+    The American Statistician, 72(4), 348-353.
     
     Arguments:
-    data: a 1-dimensional list or Numpy array that includes the data
+    data: a 1-dimensional numpy array, pandas series, or python list that 
+    includes the data
     
-    include_plot: True or False to denote whether or not a histogram is
-    plotted to show the data before and after outlier removal
+    assume_symmetric: True or False to indicate whether or not the assumption
+    of symmetrically distributed data should be enforced (default = False)
     
-    remove_mild_outliers: True or False to denote whether or not mild 
-    outliers should be removed.
+    return_bool_array: True or False to indicate whether or not to return a
+    list of values with the outliers removed (False) or a list of boolean
+    values where True indicates that a point is NOT an outlier and
+    False indicates that a point IS an outlier
     
     Returns:
-    data: a modifed copy of the data with outliers removed. If the data
-    was provided in a list, a list is returned. Otherwise, a Numpy array
-    is returned.
-    
-    Examples:
-    
-    # data provided as a list
-    >>> data = [1,1,1,1,2,2,1,1,1,1,5,10,10]
-    
-    >>> remove_outliers(data)
-    [1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 5]
-    
-    # data provided as Numpy array
-    >>> data = np.array([1,1,1,1,2,2,1,1,1,1,5,10,10])
-    
-    >>> remove_outliers(data, include_plot = False, remove_mild_outliers = True)
-    array([1, 1, 1, 1, 2, 2, 1, 1, 1, 1])
-     
-        
+    By default, the function returns a list that conatins the data
+    with outliers removed. If the user wants to inspect the data points flagged
+    as outliers, the return_bool_array argument may be specified to return a list
+    of boolean values with True indicating that a point is NOT an outlier and
+    False indicating that a point IS an outlier.
+             
     '''
     import numpy as np
-    import matplotlib.pyplot as plt
-      
-    if include_plot:
-        plt.hist(data, 
-                 density = True, 
-                 bins = 'auto', 
-                 label = 'Original',  
-                 color = 'grey', 
-                 edgecolor = 'k')
+    
+    # Convert data to a numpy array
+    data = np.array(data)     
         
-    q75, q25 = np.percentile(data, [75 ,25])
-    iqr = q75 - q25
-    lower_inner_fence = q25 - 1.5*iqr
-    upper_inner_fence = q75 + 1.5*iqr
-    lower_outer_fence = q25 - 3.0*iqr
-    upper_outer_fence = q75 + 3.0*iqr
-    data = data[np.logical_not((data > upper_outer_fence) | (data < lower_outer_fence))] 
-    if remove_mild_outliers:
-        data = data[np.logical_not((data > upper_inner_fence) | (data < lower_inner_fence))]     
-            
-    if include_plot:
-        plt.hist(data, 
-                 density = True, 
-                 bins = 'auto', 
-                 label = 'Outliers Removed',
-                 alpha = 0.8, 
-                 color = 'green', 
-                 edgecolor = 'k')
-        plt.xlabel('Value')
-        plt.ylabel('Frequency')
-        plt.legend()
-        plt.show()
+    # calculate the 25th, 50th, and 75th percentiles    
+    q1, q2, q3 = np.percentile(data, [25, 50, 75])
+    
+    # calculate the interquartile range
+    IQR = q3 - q1
+    
+    # if user wants to force the assumption that
+    # data is symmetric
+    if assume_symmetric:
         
-    return data
+        # set ratios for lower and upper fences to 1
+        RL = 1
+        RU = 1
+        
+    # if user wants to use non-symmetric method
+    else:    
+        # Calculate Bowley’s Coefficient
+        BC = (q3 + q1 - 2*q2)/(q3-q1)
+
+        # Calculate ratio for lower fence
+        RL = (1 - BC)/(1 + BC)
+        
+        # Calculate ratio for upper fence
+        RU = (1 + BC)/(1 - BC)
+
+    # compute upper and lower fences
+    FL = q1 - outlier_threshold*IQR*RL
+    FU = q3 + outlier_threshold*IQR*RU
+        
+    # Calculate values between lower and upper fences
+    mask = np.logical_not((data >= FU) | (data <= FL))
+    
+    # if return_bool_array is True
+    if return_bool_array:
+        # return mask as a list
+        return mask.tolist()
+    
+    else: 
+        # return list of values with outliers removed
+        return data[np.logical_not((data > FU) | (data < FL))].tolist()
 
 
 
