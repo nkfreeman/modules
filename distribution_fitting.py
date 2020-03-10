@@ -346,9 +346,10 @@ def fit_best_kde(data, steps = 25, rtol = 0.1, cv = 3, fit_sample_size = None):
             data = np.random.choice(data.ravel(), size = fit_sample_size, replace = False)
 
         min_val, max_val = find_min_max_diff(data)
-
+        
+        valid_kernels = ['gaussian', 'tophat', 'epanechnikov', 'exponential', 'linear', 'cosine']
         params = {'bandwidth': np.linspace(min_val, max_val, steps),
-                 'kernel': skneighbor.kde.VALID_KERNELS}
+                 'kernel': valid_kernels}
         grid = GridSearchCV(skneighbor.KernelDensity(rtol = rtol), params, cv = cv)
         grid.fit(data.reshape(-1, 1))
 
