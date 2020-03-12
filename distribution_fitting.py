@@ -122,7 +122,18 @@ def handle_outliers(data, outlier_threshold = 3.0, assume_symmetric = False, ret
     import numpy as np
     
     # Convert data to a numpy array
-    data = np.array(data)     
+    data = np.array(data)
+    
+    # Handle cases where data is small (<= 5 observations)
+    if len(data) <= 5:
+        print('Number of obersvations is less than 5. Skipping.')
+        if return_bool_array:
+            # return mask as a list
+            return [True for i in range(len(data))]
+
+        else: 
+            # return list of values with outliers removed
+            return data.tolist() 
         
     # calculate the 25th, 50th, and 75th percentiles    
     q1, q2, q3 = np.percentile(data, [25, 50, 75])
